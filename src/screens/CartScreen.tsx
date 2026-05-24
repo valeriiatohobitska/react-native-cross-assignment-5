@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import {
   FlatList,
   Image,
@@ -21,10 +21,20 @@ type CartRowProps = {
   onIncrement: (id: string, current: number) => void;
 };
 
-function CartRow({ item, onRemove, onDecrement, onIncrement }: CartRowProps) {
+// memo prevents re-render when sibling cart items change
+const CartRow = memo(function CartRow({
+  item,
+  onRemove,
+  onDecrement,
+  onIncrement,
+}: CartRowProps) {
   const { colors } = useTheme();
-  const priceValue = parseFloat(item.price.replace(/[^0-9.]/g, ''));
-  const lineTotal = (priceValue * item.quantity).toFixed(2);
+
+  // useMemo: recalculate line total only when price or quantity changes
+  const lineTotal = useMemo(() => {
+    const priceValue = parseFloat(item.price.replace(/[^0-9.]/g, ''));
+    return (priceValue * item.quantity).toFixed(2);
+  }, [item.price, item.quantity]);
 
   return (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
@@ -63,7 +73,7 @@ function CartRow({ item, onRemove, onDecrement, onIncrement }: CartRowProps) {
       </TouchableOpacity>
     </View>
   );
-}
+});
 
 export function CartScreen() {
   const { colors } = useTheme();
@@ -71,18 +81,33 @@ export function CartScreen() {
   const cart = useSelector((state: RootState) => state.cart);
   const dispatch = useDispatch();
 
-  const handleRemove = (id: string) => dispatch(removeItem(id));
-  const handleDecrement = (id: string, current: number) =>
-    dispatch(updateQuantity({ id, quantity: current - 1 }));
-  const handleIncrement = (id: string, current: number) =>
-    dispatch(updateQuantity({ id, quantity: current + 1 }));
+  // useCallback: stable references so CartRow.memo sees identical props between renders
+  const handleRemove = useCallback(
+    (id: string) => dispatch(removeItem(id)),
+    [dispatch],
+  );
+  const handleDecrement = useCallback(
+    (id: string, current: number) =>
+      dispatch(updateQuantity({ id, quantity: current - 1 })),
+    [dispatch],
+  );
+  const handleIncrement = useCallback(
+    (id: string, current: number) =>
+      dispatch(updateQuantity({ id, quantity: current + 1 })),
+    [dispatch],
+  );
 
-  const total = cart
-    .reduce((sum, item) => {
-      const price = parseFloat(item.price.replace(/[^0-9.]/g, ''));
-      return sum + price * item.quantity;
-    }, 0)
-    .toFixed(2);
+  // useMemo: recalculate cart total only when cart array changes
+  const total = useMemo(
+    () =>
+      cart
+        .reduce((sum, item) => {
+          const price = parseFloat(item.price.replace(/[^0-9.]/g, ''));
+          return sum + price * item.quantity;
+        }, 0)
+        .toFixed(2),
+    [cart],
+  );
 
   if (cart.length === 0) {
     return (
